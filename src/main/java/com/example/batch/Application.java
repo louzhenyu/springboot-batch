@@ -1,6 +1,7 @@
 package com.example.batch;
 
 import com.example.batch.domain.User;
+import com.example.batch.domain.enums.Grade;
 import com.example.batch.domain.enums.UserStatus;
 import com.example.batch.repository.UserRepository;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
@@ -36,6 +37,7 @@ public class Application {
 
             IntStream.rangeClosed(1,100).forEach(index->users.add(User.builder()
             .name(String.format("user%s",index))
+            .grade(index%2==0 ? Grade.FAMILY : index%3==0 ? Grade.GOLD : Grade.VIP)
             .status(UserStatus.ACTIVE)
             .email(String.format("test@email.com"))
             .createdDate(LocalDateTime.of(2015,12,9,0,0))
