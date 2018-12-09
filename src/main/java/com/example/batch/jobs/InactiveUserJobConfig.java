@@ -2,7 +2,6 @@ package com.example.batch.jobs;
 
 import com.example.batch.domain.User;
 import com.example.batch.domain.enums.UserStatus;
-import com.example.batch.jobs.readers.QueueItemReader;
 import com.example.batch.repository.UserRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.batch.core.Job;
@@ -12,11 +11,17 @@ import org.springframework.batch.core.configuration.annotation.StepBuilderFactor
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemWriter;
+import org.springframework.batch.item.database.JpaItemWriter;
+import org.springframework.batch.item.database.JpaPagingItemReader;
+import org.springframework.batch.item.support.ListItemReader;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import javax.persistence.EntityManagerFactory;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Created by gavinkim at 2018-12-09
@@ -28,6 +33,9 @@ import java.util.List;
 @AllArgsConstructor
 @Configuration
 public class InactiveUserJobConfig {
+
+    private final static int CHUNK_SIZE = 15;
+    private final EntityManagerFactory entityManagerFactory;
 
     private UserRepository userRepository;
 
@@ -48,16 +56,18 @@ public class InactiveUserJobConfig {
 
     /**
      * Step 을 위한 StepBuilderFactory 주입.
+     * JpaPagingItemReader 를 사용하여 데이터를 불러올때 페이징 처리하여 불러오도록 한다.
      * @param stepBuilderFactory
      * @return
      */
     @Bean
-    public Step inactiveJobStep(StepBuilderFactory stepBuilderFactory){
+    public Step inactiveJobStep(StepBuilderFactory stepBuilderFactory,
+                                JpaPagingItemReader<User> inactiveUerJpaReader){
         return stepBuilderFactory.get("inactiveUserStep")//inactiveUserStep 이라는 이름의 StepBuilder 생성
                 //Generic 을 사용하여 chunk() 의 입력타입과 출력타입을 User 타입으로 설정.
                 //chunk 단위로 묶어서 writer()를 실행시킬 단위를 지정한것이다.
                 //commit 단위가 10개로 정한것이다.
-                .<User, User> chunk(10)
+                .<User, User> chunk(CHUNK_SIZE)
                 .reader(inactiveUserReader()) //reader (회원 정보 가져오기)
                 .processor(inactiveUserProcessor())//processor (로직 수행)
                 .writer(inactiveUserWriter())//wirter (회원정보 저장)
@@ -70,20 +80,45 @@ public class InactiveUserJobConfig {
      * 주의 사항: 기본 프록시 모드가 반환되는 클래스 타입을 참조하기 때문에 StepScope 를 사용할 경우 반드시 구현된 반환타입을 명시해 반환해야 한다.
      * @return
      */
-    @Bean
+    @Bean(destroyMethod = "") // destroyMethod 를 사용해서 삭제할 빈을 자동으로 추적, "" 일 경우 warring 메히지 제거.
     @StepScope
-    public QueueItemReader<User> inactiveUserReader() {
-        List<User> oldUsers = userRepository.findByUpdatedDateBeforeAndStatusEquals(LocalDateTime.now().minusYears(1), UserStatus.ACTIVE);
-        return new QueueItemReader<>(oldUsers);
+    public JpaPagingItemReader<User> inactiveUserReader() {
+        //JpaPagingItemReader 를 사용하면 쿼리를 직접 만들어 실행 하는 방법외에는 없음.
+        JpaPagingItemReader<User> jpaPagingItemReader = new JpaPagingItemReader(){
+            //조회용 인덱스 값을 항상 0으로 반환하도록 하여, item CHUNK_SIZE 개를 수정하고,
+            //다음 CHUNK_SIZE 개를 skip 없이 순서/청크 단위로 처리하도록 한다.
+            @Override
+            public int getPage() {
+                return 0;
+            }
+        };
+        jpaPagingItemReader.setQueryString("select u from User as u where u.updatedDate < :updatedDate and u.status = :status");
+        Map<String,Object> map = new HashMap<>();
+        LocalDateTime now = LocalDateTime.now();
+        map.put("updatedDate",now.minusYears(1));
+        map.put("status",UserStatus.ACTIVE);
+
+        jpaPagingItemReader.setParameterValues(map);
+        //트랜잭션을 관리해줄 entityManagerFactory 를 설정.
+        jpaPagingItemReader.setEntityManagerFactory(entityManagerFactory);
+        //한번에 읽어올 크기 설정.
+        jpaPagingItemReader.setPageSize(CHUNK_SIZE);
+        return jpaPagingItemReader;
     }
 
     public ItemProcessor<? super User,? extends User> inactiveUserProcessor() {
         return User::setInactive;
     }
 
+    /**
+     * 저장 설정 필요 없이 generic 에 저장할 타입을 명시하고, entityManagerFactory 만 설정 하면 processor 에서 넘어온 데이터를
+     * 청크 단위로 저장한다.
+     * @return
+     */
     public ItemWriter<User> inactiveUserWriter() {
-        //return (userRepository::saveAll); // 아래와 동일함.
-        return ((List<? extends User> users)->userRepository.saveAll(users));
+        JpaItemWriter<User> jpaItemWriter = new JpaItemWriter<>();
+        jpaItemWriter.setEntityManagerFactory(entityManagerFactory);
+        return jpaItemWriter;
     }
 
 }
