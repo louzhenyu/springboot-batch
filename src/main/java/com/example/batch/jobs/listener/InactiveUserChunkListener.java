@@ -1,9 +1,9 @@
 package com.example.batch.jobs.listener;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.batch.core.ChunkListener;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.stereotype.Component;
-import org.springframework.batch.core.ChunkListener;
 
 /**
  * Created by gavinkim at 2018-12-09

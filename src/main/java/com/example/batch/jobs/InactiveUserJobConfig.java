@@ -52,12 +52,12 @@ public class InactiveUserJobConfig {
      */
     @Bean
     public Job inactiveUserJob(JobBuilderFactory jobBuilderFactory,
-                               InactiveUserJobListener inactiveUserJobListener,//리스너 주입
+                               InactiveUserJobListener jobListener,//리스너 주입
                                Flow multiFlow
                                ){
         return jobBuilderFactory.get("inactiveUserJob") // inactiveUserJob 이라는 이름의 JobBuilder 생성
                 .preventRestart() // Job 의 재실행 방지
-                .listener(inactiveUserJobListener) // listener 추가.
+                .listener(jobListener) // listener 추가.
                 .start(multiFlow)//inactiveUserJob 시작시 Flow 를 거쳐 Step 을 실행 하도록  inactiveJobFlow 설정 한다.
                 .end()
                 .build();
@@ -78,11 +78,11 @@ public class InactiveUserJobConfig {
     public Flow inactiveJobFlow(Step inactiveJobStep){
         FlowBuilder<Flow> flowBuilder = new FlowBuilder<>("inactiveJobFlow");
         return flowBuilder
-                //생성한 조건을 처리하는 InactiveJobExecutionDecider 클래스를 start 로 설정하여 맨 처음으로 시작 하도록 지정.
-                .start(new InactiveJobExecutionDecider())
-                //InactiveJobExecutionDecider 클래스의 decide 메서드를 거쳐 반환값으로 FlowExecutionStatus.FAILED 가 반환되면 end 를 사용해 끝내도록 설정
+                //생성한 조건을 처리하는 InactiveUserJobExecutionDecider 클래스를 start 로 설정하여 맨 처음으로 시작 하도록 지정.
+                .start(new InactiveUserJobExecutionDecider())
+                //InactiveUserJobExecutionDecider 클래스의 decide 메서드를 거쳐 반환값으로 FlowExecutionStatus.FAILED 가 반환되면 end 를 사용해 끝내도록 설정
                 .on(FlowExecutionStatus.FAILED.getName()).end()
-                //InactiveJobExecutionDecider 클래스의 decide 메서드를 거쳐 반환값으로 FlowExecutionStatus.COMPLETED 가 반환되면 기존에 설정한 inactiveJobStep 을 실행하도록 한다.
+                //InactiveUserJobExecutionDecider 클래스의 decide 메서드를 거쳐 반환값으로 FlowExecutionStatus.COMPLETED 가 반환되면 기존에 설정한 inactiveJobStep 을 실행하도록 한다.
                 .on(FlowExecutionStatus.COMPLETED.getName()).to(inactiveJobStep)
                 .end();
     }
@@ -121,7 +121,7 @@ public class InactiveUserJobConfig {
      * @return
      */
     public ItemProcessor<? super User,? extends User> inactiveUserProcessor() {
-        return User::setInactive;
+        return new InactiveUserItemProcessor();
     }
 
     /**

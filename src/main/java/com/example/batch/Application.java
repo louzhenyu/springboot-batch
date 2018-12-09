@@ -19,13 +19,13 @@ import java.util.stream.IntStream;
 
 @EnableBatchProcessing
 @SpringBootApplication
-public class Batch01Application {
+public class Application {
 
     private static final long MIN_DAY = LocalDate.of(2015,12,9).toEpochDay();
     private static final long MAX_DAY = LocalDate.of(2018,12,9).toEpochDay();
 
     public static void main(String[] args) {
-        SpringApplication.run(Batch01Application.class, args);
+        SpringApplication.run(Application.class, args);
     }
 
     //테스트 데이터를 위해 더미 데이터를 생성한다.
