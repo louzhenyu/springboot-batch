@@ -85,7 +85,8 @@ public class InactiveUserJobConfig {
      * Spel 을 사용하여 jobparameters 에서 nowDate 파라미터를 전달받는다.
      * @return
      */
-    @Bean(destroyMethod = "") // destroyMethod 를 사용해서 삭제할 빈을 자동으로 추적, "" 일 경우 warring 메히지 제거.
+    // destroyMethod 를 사용해서 삭제할 빈을 자동으로 추적, "" 일 경우 warring 메시지 제거.
+    @Bean(destroyMethod = "")
     @StepScope
     public ListItemReader<User> inactiveUserReader(@Value("#{jobParameters[nowDate]}") Date nowDate, UserRepository userRepository) {
         //Date 타입을 LocalDateTime 으로 전환한다.
@@ -127,10 +128,14 @@ public class InactiveUserJobConfig {
      * 청크 단위로 저장한다.
      * @return
      */
+//    public ItemWriter<User> inactiveUserWriter() {
+//        JpaItemWriter<User> jpaItemWriter = new JpaItemWriter<>();
+//        jpaItemWriter.setEntityManagerFactory(entityManagerFactory);
+//        return jpaItemWriter;
+//    }
+
     public ItemWriter<User> inactiveUserWriter() {
-        JpaItemWriter<User> jpaItemWriter = new JpaItemWriter<>();
-        jpaItemWriter.setEntityManagerFactory(entityManagerFactory);
-        return jpaItemWriter;
+        return ((List<? extends User> users) -> userRepository.saveAll(users));
     }
 
 }
