@@ -14,11 +14,14 @@ import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.JpaItemWriter;
 import org.springframework.batch.item.database.JpaPagingItemReader;
 import org.springframework.batch.item.support.ListItemReader;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import javax.persistence.EntityManagerFactory;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,13 +65,13 @@ public class InactiveUserJobConfig {
      */
     @Bean
     public Step inactiveJobStep(StepBuilderFactory stepBuilderFactory,
-                                JpaPagingItemReader<User> inactiveUerJpaReader){
+                                ListItemReader<User> inactiveUerJpaReader){
         return stepBuilderFactory.get("inactiveUserStep")//inactiveUserStep 이라는 이름의 StepBuilder 생성
                 //Generic 을 사용하여 chunk() 의 입력타입과 출력타입을 User 타입으로 설정.
                 //chunk 단위로 묶어서 writer()를 실행시킬 단위를 지정한것이다.
                 //commit 단위가 10개로 정한것이다.
                 .<User, User> chunk(CHUNK_SIZE)
-                .reader(inactiveUserReader()) //reader (회원 정보 가져오기)
+                .reader(inactiveUerJpaReader) //reader (회원 정보 가져오기)
                 .processor(inactiveUserProcessor())//processor (로직 수행)
                 .writer(inactiveUserWriter())//wirter (회원정보 저장)
                 .build();
@@ -78,33 +81,42 @@ public class InactiveUserJobConfig {
      * 기본 빈 생성은 싱글톤이다. StepScope 를 사용할 경우 해당 메서드는 Step 의 주기에 따라 새로운 빈을 생성한다.
      * step 의 실행마다 새로 빈을 만들기 때문에 지연 생성이 가능함.
      * 주의 사항: 기본 프록시 모드가 반환되는 클래스 타입을 참조하기 때문에 StepScope 를 사용할 경우 반드시 구현된 반환타입을 명시해 반환해야 한다.
+     *
+     * Spel 을 사용하여 jobparameters 에서 nowDate 파라미터를 전달받는다.
      * @return
      */
     @Bean(destroyMethod = "") // destroyMethod 를 사용해서 삭제할 빈을 자동으로 추적, "" 일 경우 warring 메히지 제거.
     @StepScope
-    public JpaPagingItemReader<User> inactiveUserReader() {
-        //JpaPagingItemReader 를 사용하면 쿼리를 직접 만들어 실행 하는 방법외에는 없음.
+    public ListItemReader<User> inactiveUserReader(@Value("#{jobParameters[nowDate]}") Date nowDate, UserRepository userRepository) {
+        //Date 타입을 LocalDateTime 으로 전환한다.
+        LocalDateTime now = LocalDateTime.ofInstant(nowDate.toInstant(), ZoneId.systemDefault());
+        List<User> inactiveUsers = userRepository.findByUpdatedDateBeforeAndStatusEquals(now.minusYears(1),UserStatus.ACTIVE);
+        return new ListItemReader<>(inactiveUsers);
+    }
+
+    //페이징 처리 필요시 아래 리더를 사용할것.
+    /*
+    @Bean(destroyMethod="")
+    @StepScope
+    public JpaPagingItemReader<User> inactiveUserJpaReader(@Value("#{jobParameters[nowDate]}") Date nowDate) {
         JpaPagingItemReader<User> jpaPagingItemReader = new JpaPagingItemReader(){
-            //조회용 인덱스 값을 항상 0으로 반환하도록 하여, item CHUNK_SIZE 개를 수정하고,
-            //다음 CHUNK_SIZE 개를 skip 없이 순서/청크 단위로 처리하도록 한다.
+            //반드시 CHUNK_SIZE 만큼씩 가져와서 작업하도록 하기 위해 0을 리턴 해주도록 한다.
             @Override
             public int getPage() {
                 return 0;
             }
         };
-        jpaPagingItemReader.setQueryString("select u from User as u where u.updatedDate < :updatedDate and u.status = :status");
-        Map<String,Object> map = new HashMap<>();
-        LocalDateTime now = LocalDateTime.now();
-        map.put("updatedDate",now.minusYears(1));
-        map.put("status",UserStatus.ACTIVE);
-
+        jpaPagingItemReader.setQueryString("select u from User as u where u.createdDate < :createdDate and u.status = :status");
+        Map<String, Object> map = new HashMap<>();
+        LocalDateTime now = LocalDateTime.ofInstant(nowDate.toInstant(), ZoneId.systemDefault());
+        map.put("createdDate", now.minusYears(1));
+        map.put("status", UserStatus.ACTIVE);
         jpaPagingItemReader.setParameterValues(map);
-        //트랜잭션을 관리해줄 entityManagerFactory 를 설정.
         jpaPagingItemReader.setEntityManagerFactory(entityManagerFactory);
-        //한번에 읽어올 크기 설정.
         jpaPagingItemReader.setPageSize(CHUNK_SIZE);
         return jpaPagingItemReader;
     }
+    */
 
     public ItemProcessor<? super User,? extends User> inactiveUserProcessor() {
         return User::setInactive;
