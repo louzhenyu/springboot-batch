@@ -22,6 +22,8 @@ import org.springframework.batch.item.support.ListItemReader;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.SimpleAsyncTaskExecutor;
+import org.springframework.core.task.TaskExecutor;
 
 import javax.persistence.EntityManagerFactory;
 import java.time.LocalDateTime;
@@ -52,13 +54,11 @@ public class InactiveUserJobConfig {
     @Bean
     public Job inactiveUserJob(JobBuilderFactory jobBuilderFactory,
                                InactiveUserJobListener inactiveUserJobListener,//리스너 주입
-                               /*Step inactiveJobStep,*/
                                Flow inactiveJobFlow
                                ){
         return jobBuilderFactory.get("inactiveUserJob") // inactiveUserJob 이라는 이름의 JobBuilder 생성
                 .preventRestart() // Job 의 재실행 방지
                 .listener(inactiveUserJobListener) // listener 추가.
-                //.start(inactiveJobStep) // param 에서 주입받은 휴면 회원 관련 Step 인 inactiveJobStep 을 가장 먼저 실행 하도록 설정.
                 .start(inactiveJobFlow)//inactiveUserJob 시작시 Flow 를 거쳐 Step 을 실행 하도록  inactiveJobFlow 설정 한다.
                 .end()
                 .build();
@@ -86,8 +86,8 @@ public class InactiveUserJobConfig {
     @Bean
     public Step inactiveJobStep(StepBuilderFactory stepBuilderFactory,
                                 ListItemReader<User> inactiveUerJpaReader,
-                                /*InactiveUserStepListener inactiveUserStepListener,*/
-                                InactiveUserChunkListener inactiveUserChunkListener //chunk 단위로 실행 하기 때문에 chunklistener 를 사용하도록 한다.
+                                InactiveUserChunkListener inactiveUserChunkListener, //chunk 단위로 실행 하기 때문에 chunklistener 를 사용하도록 한다.
+                                TaskExecutor taskExecutor
     ){
         return stepBuilderFactory.get("inactiveUserStep")//inactiveUserStep 이라는 이름의 StepBuilder 생성
                 //Generic 을 사용하여 chunk() 의 입력타입과 출력타입을 User 타입으로 설정.
@@ -97,9 +97,15 @@ public class InactiveUserJobConfig {
                 .reader(inactiveUerJpaReader) //reader (회원 정보 가져오기)
                 .processor(inactiveUserProcessor())//processor (로직 수행)
                 .writer(inactiveUserWriter())//wirter (회원정보 저장)
-                //.listener(inactiveUserStepListener) // Step 실행전후 로직 실행을 위해 추가.
                 .listener(inactiveUserChunkListener) // step 실행전후 로직 실행을 위해 추가.
+                .taskExecutor(taskExecutor) //bean 으로 생성한 TaskExecutor 등록
+                .throttleLimit(2) //설정된 제한 횟수만큼만 스레드를 동시에 실행시킴.시스템에 할당된 스레드 풀의 크기보다 작은 값으로 설정해야한다. 1일경우 동기화방식과 동일함(스레드방식으로 실행 되지 않는다.)
                 .build();
+    }
+
+    @Bean
+    public TaskExecutor taskExecutor(){
+        return new SimpleAsyncTaskExecutor("Batch_Task"); //SimpleAsyncTaskExecutor 는 스레드 요청시마다 스레드를 새로 생성한다.
     }
 
     /**
@@ -158,14 +164,14 @@ public class InactiveUserJobConfig {
      * 청크 단위로 저장한다.
      * @return
      */
-    public ItemWriter<User> inactiveUserWriter() {
-        JpaItemWriter<User> jpaItemWriter = new JpaItemWriter<>();
-        jpaItemWriter.setEntityManagerFactory(entityManagerFactory);
-        return jpaItemWriter;
-    }
-
 //    public ItemWriter<User> inactiveUserWriter() {
-//        return ((List<? extends User> users) -> userRepository.saveAll(users));
+//        JpaItemWriter<User> jpaItemWriter = new JpaItemWriter<>();
+//        jpaItemWriter.setEntityManagerFactory(entityManagerFactory);
+//        return jpaItemWriter;
 //    }
+
+    public ItemWriter<User> inactiveUserWriter() {
+        return ((List<? extends User> users) -> userRepository.saveAll(users));
+    }
 
 }

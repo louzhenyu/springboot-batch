@@ -21,11 +21,13 @@ public class InactiveJobExecutionDecider implements JobExecutionDecider {
     public FlowExecutionStatus decide(JobExecution jobExecution, StepExecution stepExecution) {
         //예: 양수이면 JobStep 실행, 아니면 동작 하지 않도록 아래와 같이 랜덤 상수를 생성하여 판별한 후 상태를 리턴 하도록 한다.
         //음수가 나올 경우 실행 불가, 아닐 경우 실행 하도록 아래에서 조건 설정.
-        if(new Random().nextInt() > 0){
-            log.info("FlowExecutionStatus.COMPLETED");
-            return FlowExecutionStatus.COMPLETED;
-        }
-        log.info("FlowExecutionStatus.FAILED");
-        return FlowExecutionStatus.FAILED;
+//        if(new Random().nextInt() > 0){
+//            log.info("FlowExecutionStatus.COMPLETED");
+//            return FlowExecutionStatus.COMPLETED;
+//        }
+//        log.info("FlowExecutionStatus.FAILED");
+//        return FlowExecutionStatus.FAILED;
+
+        return FlowExecutionStatus.COMPLETED; //테스트를 위해 반드시 실행 되도록 추가함.
     }
 }
