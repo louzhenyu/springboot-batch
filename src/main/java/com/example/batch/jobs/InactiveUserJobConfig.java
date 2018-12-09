@@ -12,6 +12,9 @@ import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepScope;
+import org.springframework.batch.core.job.builder.FlowBuilder;
+import org.springframework.batch.core.job.flow.Flow;
+import org.springframework.batch.core.job.flow.FlowExecutionStatus;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.JpaItemWriter;
@@ -45,19 +48,33 @@ public class InactiveUserJobConfig {
     /**
      * Job 생성을 위한 JobBuilderFactory 주입.
      * - 빈에 주입할 객체를 param 으로 명시할 경우 @Autowired 를 사용한것과 같다.
-     * @param jobBuilderFactory
-     * @param inactiveJobStep
-     * @return
      */
     @Bean
     public Job inactiveUserJob(JobBuilderFactory jobBuilderFactory,
                                InactiveUserJobListener inactiveUserJobListener,//리스너 주입
-                               Step inactiveJobStep){
+                               /*Step inactiveJobStep,*/
+                               Flow inactiveJobFlow
+                               ){
         return jobBuilderFactory.get("inactiveUserJob") // inactiveUserJob 이라는 이름의 JobBuilder 생성
                 .preventRestart() // Job 의 재실행 방지
                 .listener(inactiveUserJobListener) // listener 추가.
-                .start(inactiveJobStep) // param 에서 주입받은 휴면 회원 관련 Step 인 inactiveJobStep 을 가장 먼저 실행 하도록 설정.
+                //.start(inactiveJobStep) // param 에서 주입받은 휴면 회원 관련 Step 인 inactiveJobStep 을 가장 먼저 실행 하도록 설정.
+                .start(inactiveJobFlow)//inactiveUserJob 시작시 Flow 를 거쳐 Step 을 실행 하도록  inactiveJobFlow 설정 한다.
+                .end()
                 .build();
+    }
+
+    @Bean
+    public Flow inactiveJobFlow(Step inactiveJobStep){
+        FlowBuilder<Flow> flowBuilder = new FlowBuilder<>("inactiveJobFlow");
+        return flowBuilder
+                //생성한 조건을 처리하는 InactiveJobExecutionDecider 클래스를 start 로 설정하여 맨 처음으로 시작 하도록 지정.
+                .start(new InactiveJobExecutionDecider())
+                //InactiveJobExecutionDecider 클래스의 decide 메서드를 거쳐 반환값으로 FlowExecutionStatus.FAILED 가 반환되면 end 를 사용해 끝내도록 설정
+                .on(FlowExecutionStatus.FAILED.getName()).end()
+                //InactiveJobExecutionDecider 클래스의 decide 메서드를 거쳐 반환값으로 FlowExecutionStatus.COMPLETED 가 반환되면 기존에 설정한 inactiveJobStep 을 실행하도록 한다.
+                .on(FlowExecutionStatus.COMPLETED.getName()).to(inactiveJobStep)
+                .end();
     }
 
     /**
