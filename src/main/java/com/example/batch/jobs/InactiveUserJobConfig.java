@@ -4,7 +4,6 @@ import com.example.batch.domain.User;
 import com.example.batch.domain.enums.UserStatus;
 import com.example.batch.jobs.listener.InactiveUserChunkListener;
 import com.example.batch.jobs.listener.InactiveUserJobListener;
-import com.example.batch.jobs.listener.InactiveUserStepListener;
 import com.example.batch.repository.UserRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.batch.core.Job;
@@ -17,7 +16,6 @@ import org.springframework.batch.core.job.flow.Flow;
 import org.springframework.batch.core.job.flow.FlowExecutionStatus;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemWriter;
-import org.springframework.batch.item.database.JpaItemWriter;
 import org.springframework.batch.item.support.ListItemReader;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -110,8 +108,6 @@ public class InactiveUserJobConfig {
                 .processor(inactiveUserProcessor())//processor (로직 수행)
                 .writer(inactiveUserWriter())//wirter (회원정보 저장)
                 .listener(inactiveUserChunkListener) // step 실행전후 로직 실행을 위해 추가.
-                .taskExecutor(taskExecutor) //bean 으로 생성한 TaskExecutor 등록
-                .throttleLimit(2) //설정된 제한 횟수만큼만 스레드를 동시에 실행시킴.시스템에 할당된 스레드 풀의 크기보다 작은 값으로 설정해야한다. 1일경우 동기화방식과 동일함(스레드방식으로 실행 되지 않는다.)
                 .build();
     }
 
