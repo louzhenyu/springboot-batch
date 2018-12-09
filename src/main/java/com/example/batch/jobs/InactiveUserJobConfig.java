@@ -2,6 +2,9 @@ package com.example.batch.jobs;
 
 import com.example.batch.domain.User;
 import com.example.batch.domain.enums.UserStatus;
+import com.example.batch.jobs.listener.InactiveUserChunkListener;
+import com.example.batch.jobs.listener.InactiveUserJobListener;
+import com.example.batch.jobs.listener.InactiveUserStepListener;
 import com.example.batch.repository.UserRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.batch.core.Job;
@@ -12,7 +15,6 @@ import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.JpaItemWriter;
-import org.springframework.batch.item.database.JpaPagingItemReader;
 import org.springframework.batch.item.support.ListItemReader;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -22,9 +24,7 @@ import javax.persistence.EntityManagerFactory;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Created by gavinkim at 2018-12-09
@@ -50,9 +50,12 @@ public class InactiveUserJobConfig {
      * @return
      */
     @Bean
-    public Job inactiveUserJob(JobBuilderFactory jobBuilderFactory, Step inactiveJobStep){
+    public Job inactiveUserJob(JobBuilderFactory jobBuilderFactory,
+                               InactiveUserJobListener inactiveUserJobListener,//리스너 주입
+                               Step inactiveJobStep){
         return jobBuilderFactory.get("inactiveUserJob") // inactiveUserJob 이라는 이름의 JobBuilder 생성
                 .preventRestart() // Job 의 재실행 방지
+                .listener(inactiveUserJobListener) // listener 추가.
                 .start(inactiveJobStep) // param 에서 주입받은 휴면 회원 관련 Step 인 inactiveJobStep 을 가장 먼저 실행 하도록 설정.
                 .build();
     }
@@ -65,7 +68,10 @@ public class InactiveUserJobConfig {
      */
     @Bean
     public Step inactiveJobStep(StepBuilderFactory stepBuilderFactory,
-                                ListItemReader<User> inactiveUerJpaReader){
+                                ListItemReader<User> inactiveUerJpaReader,
+                                /*InactiveUserStepListener inactiveUserStepListener,*/
+                                InactiveUserChunkListener inactiveUserChunkListener //chunk 단위로 실행 하기 때문에 chunklistener 를 사용하도록 한다.
+    ){
         return stepBuilderFactory.get("inactiveUserStep")//inactiveUserStep 이라는 이름의 StepBuilder 생성
                 //Generic 을 사용하여 chunk() 의 입력타입과 출력타입을 User 타입으로 설정.
                 //chunk 단위로 묶어서 writer()를 실행시킬 단위를 지정한것이다.
@@ -74,7 +80,17 @@ public class InactiveUserJobConfig {
                 .reader(inactiveUerJpaReader) //reader (회원 정보 가져오기)
                 .processor(inactiveUserProcessor())//processor (로직 수행)
                 .writer(inactiveUserWriter())//wirter (회원정보 저장)
+                //.listener(inactiveUserStepListener) // Step 실행전후 로직 실행을 위해 추가.
+                .listener(inactiveUserChunkListener) // step 실행전후 로직 실행을 위해 추가.
                 .build();
+    }
+
+    /**
+     * 배치가 실행시 처리할 로직을 담당하는 프로세서
+     * @return
+     */
+    public ItemProcessor<? super User,? extends User> inactiveUserProcessor() {
+        return User::setInactive;
     }
 
     /**
@@ -119,23 +135,20 @@ public class InactiveUserJobConfig {
     }
     */
 
-    public ItemProcessor<? super User,? extends User> inactiveUserProcessor() {
-        return User::setInactive;
-    }
 
     /**
      * 저장 설정 필요 없이 generic 에 저장할 타입을 명시하고, entityManagerFactory 만 설정 하면 processor 에서 넘어온 데이터를
      * 청크 단위로 저장한다.
      * @return
      */
-//    public ItemWriter<User> inactiveUserWriter() {
-//        JpaItemWriter<User> jpaItemWriter = new JpaItemWriter<>();
-//        jpaItemWriter.setEntityManagerFactory(entityManagerFactory);
-//        return jpaItemWriter;
-//    }
-
     public ItemWriter<User> inactiveUserWriter() {
-        return ((List<? extends User> users) -> userRepository.saveAll(users));
+        JpaItemWriter<User> jpaItemWriter = new JpaItemWriter<>();
+        jpaItemWriter.setEntityManagerFactory(entityManagerFactory);
+        return jpaItemWriter;
     }
+
+//    public ItemWriter<User> inactiveUserWriter() {
+//        return ((List<? extends User> users) -> userRepository.saveAll(users));
+//    }
 
 }
