@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
+import java.util.stream.IntStream;
 
 /**
  * Created by gavinkim at 2018-12-09
@@ -42,7 +43,7 @@ import java.util.List;
 @Configuration
 public class InactiveUserJobConfig {
 
-    private final static int CHUNK_SIZE = 15;
+    private final static int CHUNK_SIZE = 5;
     private final EntityManagerFactory entityManagerFactory;
 
     private UserRepository userRepository;
@@ -54,17 +55,28 @@ public class InactiveUserJobConfig {
     @Bean
     public Job inactiveUserJob(JobBuilderFactory jobBuilderFactory,
                                InactiveUserJobListener inactiveUserJobListener,//리스너 주입
-                               Flow inactiveJobFlow
+                               Flow multiFlow
                                ){
         return jobBuilderFactory.get("inactiveUserJob") // inactiveUserJob 이라는 이름의 JobBuilder 생성
                 .preventRestart() // Job 의 재실행 방지
                 .listener(inactiveUserJobListener) // listener 추가.
-                .start(inactiveJobFlow)//inactiveUserJob 시작시 Flow 를 거쳐 Step 을 실행 하도록  inactiveJobFlow 설정 한다.
+                .start(multiFlow)//inactiveUserJob 시작시 Flow 를 거쳐 Step 을 실행 하도록  inactiveJobFlow 설정 한다.
                 .end()
                 .build();
     }
 
     @Bean
+    public Flow multiFlow(Step inactiveJobStep){
+        Flow flows[] = new Flow[CHUNK_SIZE];
+        IntStream.range(0,flows.length).forEach(i->flows[i] =
+                new FlowBuilder<Flow>("MultiFlow"+i).from(inactiveJobFlow(inactiveJobStep)).end());
+        FlowBuilder<Flow> flowBuilder = new FlowBuilder<>("MultiFlow");
+        return flowBuilder
+                .split(taskExecutor()) //multiFlow 에서 사용할 TaskExecutor 를 등록.
+                .add(flows) // inactiveJobFlow CHUNK_SIZE 만큼 할당된 flows 배열 추가.
+                .build();
+    }
+//    @Bean //빈으로 생성시 기본적으로 싱글톤이기 때문에 multiFlow 를 위해서는 빈으로 등록하지 말아야함.
     public Flow inactiveJobFlow(Step inactiveJobStep){
         FlowBuilder<Flow> flowBuilder = new FlowBuilder<>("inactiveJobFlow");
         return flowBuilder
