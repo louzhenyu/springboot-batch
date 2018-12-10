@@ -94,6 +94,7 @@ public class InactiveUserJobConfig {
         return new InactiveUserItemProcessor();
     }
 
+
     @Bean
     @StepScope
     public ListItemReader<User> inactiveUserReader(@Value("#{stepExecutionContext[grade]}") String grade, UserRepository userRepository) {

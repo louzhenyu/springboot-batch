@@ -18,46 +18,48 @@ import java.time.LocalDateTime;
 @Getter
 @EqualsAndHashCode(of = {"idx","email"})
 @NoArgsConstructor
-@Table
+@Table(name = "STUDY_USER")
 @Entity
 public class User implements Serializable {
 
     @Id
-    @Column
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "STUDY_USER_SEQ",nullable = false, unique = true, updatable = false)
     private Long idx;
 
+    @Column(name = "NAME")
     private String name;
 
+    @Column(name = "EMAIL")
     private String email;
 
-    private String principal;
-
+    @Column(name = "SOCIAL_TYPE")
     @Enumerated(EnumType.STRING)
     private SocialType socialType;
 
+    @Column(name = "STATUS")
     @Enumerated(EnumType.STRING)
     private UserStatus status;
 
-    @Column
+    @Column(name = "GRADE")
     @Enumerated(EnumType.STRING)
     private Grade grade;
 
+    @Column(name = "CREATED_DATE")
     private LocalDateTime createdDate;
-
+    @Column(name = "UPDATED_DATE")
     private LocalDateTime updatedDate;
 
     @Builder
     public User(String name,
                 String email,
-                String principal,
                 SocialType socialType,
                 UserStatus status,
                 Grade grade,
                 LocalDateTime createdDate,LocalDateTime updatedDate) {
+        this.idx = idx;
         this.name = name;
         this.email = email;
-        this.principal = principal;
         this.socialType = socialType;
         this.status = status;
         this.grade = grade;
